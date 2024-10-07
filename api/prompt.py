@@ -11,7 +11,7 @@ class Prompt:
     def __init__(self):
         self.msg_list = []
         self.msg_list.append(f"system: 你是一個有幫助的 AI 助手。請始終使用繁體中文回答。")
-        self.msg_list.append(f"assistant: {LANGUAGE_TABLE[chat_language]}")
+        self.msg_list.append(f"system: {LANGUAGE_TABLE[chat_language]}")
     
     def add_msg(self, new_msg):
         if len(self.msg_list) >= MSG_LIST_LIMIT:
