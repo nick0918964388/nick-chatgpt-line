@@ -46,5 +46,5 @@ def handle_message(event):
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=reply_msg))
-if __name__ == "__main__":
-    app.run()
+if __name__ == "__main__":    
+    app.run(host='0.0.0.0', port=8005, debug=True)
