@@ -14,9 +14,14 @@ class ChatGPT:
         self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", default=240))
 
     def get_response(self):
+        messages = [{"role": "system", "content": self.prompt.msg_list[0]}]
+        for msg in self.prompt.msg_list[1:]:
+            role, content = msg.split(": ", 1)
+            messages.append({"role": role.lower(), "content": content})
+
         response = client.chat.completions.create(
             model=self.model,
-            messages=[{"role": "user", "content": self.prompt.generate_prompt()}],
+            messages=messages,
             temperature=self.temperature,
             frequency_penalty=self.frequency_penalty,
             presence_penalty=self.presence_penalty,
