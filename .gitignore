@@ -1,0 +1,45 @@
+# 環境變數文件
+.env
+
+# Python 相關
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虛擬環境
+venv/
+env/
+ENV/
+
+# IDE 相關
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系統相關
+.DS_Store
+Thumbs.db
+
+# 日誌文件
+*.log
+
+# 臨時文件
+*.tmp
+
+# 依賴管理
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 測試相關
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 構建相關
+build/
+dist/
+*.egg-info/
+
+# Vercel
+.vercel
