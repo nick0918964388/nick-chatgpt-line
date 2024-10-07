@@ -10,16 +10,18 @@ LANGUAGE_TABLE = {
 class Prompt:
     def __init__(self):
         self.msg_list = []
-        self.msg_list.append(f"system: 你是一個有幫助的 AI 助手。請始終使用繁體中文回答。")
-        self.msg_list.append(f"system: {LANGUAGE_TABLE[chat_language]}")
+        self.msg_list.append(f"system:你是一個有幫助的 AI 助手。請始終使用繁體中文回答。")
+        self.msg_list.append(f"system:{LANGUAGE_TABLE[chat_language]}")
     
     def add_msg(self, new_msg):
         if len(self.msg_list) >= MSG_LIST_LIMIT:
             self.remove_msg()
+        if not new_msg.startswith(("Human:", "AI:", "system:")):
+            new_msg = f"Human:{new_msg}"
         self.msg_list.append(new_msg)
 
     def remove_msg(self):
-        self.msg_list.pop(1)  # 保留系統消息，刪除最早的對話消息
+        self.msg_list.pop(2)  # 保留兩個系統消息，刪除最早的對話消息
 
     def generate_prompt(self):
         return '\n'.join(self.msg_list) + "\n請用繁體中文回答。"

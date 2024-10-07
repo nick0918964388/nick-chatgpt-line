@@ -14,10 +14,20 @@ class ChatGPT:
         self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", default=240))
 
     def get_response(self):
-        messages = [{"role": "system", "content": self.prompt.msg_list[0]}]
-        for msg in self.prompt.msg_list[1:]:
-            role, content = msg.split(": ", 1)
-            messages.append({"role": role.lower(), "content": content})
+        messages = []
+        for msg in self.prompt.msg_list:
+            if msg.startswith("system:"):
+                role = "system"
+                content = msg[7:].strip()
+            elif msg.startswith("Human:"):
+                role = "user"
+                content = msg[6:].strip()
+            elif msg.startswith("AI:"):
+                role = "assistant"
+                content = msg[3:].strip()
+            else:
+                continue  # 跳過無效的消息格式
+            messages.append({"role": role, "content": content})
 
         response = client.chat.completions.create(
             model=self.model,
