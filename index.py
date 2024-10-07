@@ -1,8 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from api.chatgpt import ChatGPT
+from .api.chatgpt import ChatGPT
 import os
 from dotenv import load_dotenv
 load_dotenv()
