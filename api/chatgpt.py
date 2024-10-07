@@ -2,6 +2,11 @@ from api.prompt import Prompt
 import os
 import requests
 from openai import OpenAI
+import logging
+
+# 設置日誌級別
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 API_TYPE = os.getenv("API_TYPE", "openai")  # 默認使用 OpenAI API
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://ollama.webtw.xyz:11434/api/generate")  # Ollama API 的 URL
@@ -18,9 +23,11 @@ class ChatGPT:
         self.frequency_penalty = float(os.getenv("OPENAI_FREQUENCY_PENALTY", default=0))
         self.presence_penalty = float(os.getenv("OPENAI_PRESENCE_PENALTY", default=0.6))
         self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", default=240))
+        logger.info(f"ChatGPT initialized with API_TYPE: {API_TYPE}")
 
     def get_response(self):
         messages = self._prepare_messages()
+        logger.info(f"Prepared messages: {messages}")
         
         if API_TYPE == "openai":
             return self._get_openai_response(messages)
@@ -47,6 +54,7 @@ class ChatGPT:
         return messages
 
     def _get_openai_response(self, messages):
+        logger.info("Sending request to OpenAI API")
         response = client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -55,6 +63,7 @@ class ChatGPT:
             presence_penalty=self.presence_penalty,
             max_tokens=self.max_tokens
         )
+        logger.info("Received response from OpenAI API")
         return response.choices[0].message.content.strip()
 
     def _get_ollama_response(self, messages):
@@ -64,11 +73,16 @@ class ChatGPT:
             "prompt": prompt,
             "stream": False
         }
+        logger.info(f"Sending request to Ollama API: {OLLAMA_API_URL}")
         response = requests.post(OLLAMA_API_URL, json=payload)
         if response.status_code == 200:
+            logger.info("Received successful response from Ollama API")
             return response.json()["response"].strip()
         else:
-            raise Exception(f"Ollama API request failed with status code {response.status_code}")
+            error_msg = f"Ollama API request failed with status code {response.status_code}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
 
     def add_msg(self, text):
         self.prompt.add_msg(text)
+        logger.info(f"Added message: {text}")
