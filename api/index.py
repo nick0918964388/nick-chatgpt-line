@@ -26,6 +26,71 @@ chatgpt = ChatGPT()
 @app.route('/')
 def home():
     return 'Hello, World!'
+
+# 狀態檢查endpoint
+@app.route('/status', methods=['GET'])
+def status():
+    """顯示目前的設定狀態"""
+    use_sync_mode = os.getenv("USE_SYNC_MODE", "true").lower() == "true"
+    
+    return {
+        "status": "運行中",
+        "mode": "同步模式" if use_sync_mode else "異步模式",
+        "line_configured": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN")),
+        "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:7b-instruct-q4_0"),
+        "sync_mode_enabled": use_sync_mode
+    }
+
+# 測試endpoint
+@app.route('/test', methods=['GET'])
+def test_line_api():
+    """測試LINE API和ollama連接"""
+    logger.info("🔍 開始測試LINE API和ollama連接")
+    
+    results = {
+        "line_token": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN")),
+        "line_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
+        "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:7b-instruct-q4_0")
+    }
+    
+    # 測試ollama連接
+    try:
+        import requests
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        test_response = requests.get(f"{ollama_host}/api/tags", timeout=5)
+        results["ollama_connection"] = f"成功 - 狀態碼: {test_response.status_code}"
+        results["ollama_models"] = test_response.json()
+    except Exception as e:
+        results["ollama_connection"] = f"失敗: {str(e)}"
+    
+    # 測試ChatGPT初始化
+    try:
+        test_chatgpt = ChatGPT()
+        results["chatgpt_init"] = "成功"
+    except Exception as e:
+        results["chatgpt_init"] = f"失敗: {str(e)}"
+    
+    logger.info(f"📋 測試結果: {results}")
+    return results
+
+# 測試LINE push message的endpoint
+@app.route('/test_push/<user_id>', methods=['GET'])
+def test_push_message(user_id):
+    """測試向特定用戶發送push message"""
+    logger.info(f"🔍 測試向用戶 {user_id} 發送push message")
+    
+    try:
+        response = line_bot_api.push_message(
+            user_id,
+            TextSendMessage(text="🧪 這是一個測試訊息")
+        )
+        logger.info(f"✅ Push message發送成功: {response}")
+        return {"status": "success", "message": "Push message發送成功", "response": str(response)}
+    except Exception as e:
+        logger.error(f"❌ Push message發送失敗: {e}")
+        return {"status": "error", "message": str(e)}
 @app.route("/webhook", methods=['POST'])
 def callback():
     logger.info("🔄 收到webhook請求")
@@ -47,19 +112,11 @@ def callback():
         abort(500)
     return 'OK'
 def process_message_async(user_id, message_text):
-    """異步處理訊息，避免timeout"""
+    """異步處理訊息，避免timeout（備用方案）"""
     logger.info(f"🚀 開始異步處理訊息 - 用戶ID: {user_id}")
     logger.info(f"💬 用戶訊息: {message_text}")
     
     try:
-        # 先發送"正在思考"的訊息
-        logger.info("📤 發送思考中訊息")
-        line_bot_api.push_message(
-            user_id,
-            TextSendMessage(text="🤔 正在思考中，請稍等...")
-        )
-        logger.info("✅ 思考中訊息已發送")
-        
         # 處理AI回應
         logger.info("🧠 開始處理AI回應")
         chatgpt.add_msg(f"user:{message_text}?\n")
@@ -74,11 +131,11 @@ def process_message_async(user_id, message_text):
         
         # 發送實際回應
         logger.info("📤 發送AI回應給用戶")
-        line_bot_api.push_message(
+        final_response = line_bot_api.push_message(
             user_id,
             TextSendMessage(text=reply_msg)
         )
-        logger.info("✅ AI回應已成功發送")
+        logger.info(f"✅ AI回應已成功發送，回應: {final_response}")
         
     except Exception as e:
         logger.error(f"❌ 處理訊息時發生錯誤: {e}")
@@ -119,15 +176,97 @@ def handle_message(event):
     if working_status:
         logger.info("✅ 系統處於工作狀態，開始處理訊息")
         
-        # 在背景執行緒中處理AI回應
-        logger.info("🧵 創建背景執行緒處理AI回應")
-        thread = threading.Thread(
-            target=process_message_async,
-            args=(user_id, message_text)
-        )
-        thread.daemon = True
-        thread.start()
-        logger.info("🚀 背景執行緒已啟動")
+        # 檢查是否使用同步模式（預設為true）
+        use_sync_mode = os.getenv("USE_SYNC_MODE", "true").lower() == "true"
+        
+        if use_sync_mode:
+            logger.info("🔄 使用同步模式處理")
+            try:
+                # 快速檢查ollama是否可用
+                logger.info("🔍 快速檢查ollama連接")
+                import requests
+                ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+                
+                # 設定較短的timeout避免webhook超時
+                try:
+                    test_response = requests.get(f"{ollama_host}/api/tags", timeout=2)
+                    if test_response.status_code != 200:
+                        raise Exception("Ollama服務不可用")
+                    logger.info("✅ Ollama連接正常")
+                except Exception as ollama_error:
+                    logger.error(f"❌ Ollama連接失敗: {ollama_error}")
+                    line_bot_api.reply_message(
+                        reply_token,
+                        TextSendMessage(text="❌ AI服務暫時無法使用，請稍後再試")
+                    )
+                    return
+                
+                # 處理AI回應（同步執行）
+                logger.info("🧠 開始同步處理AI回應")
+                chatgpt.add_msg(f"user:{message_text}?\n")
+                logger.info("📝 已將用戶訊息加入對話")
+                
+                # 獲取AI回應
+                reply_msg = chatgpt.get_response().replace("AI:", "", 1)
+                logger.info(f"🤖 獲得AI回應: {reply_msg}")
+                
+                chatgpt.add_msg(f"assistant:{reply_msg}\n")
+                logger.info("📝 已將AI回應加入對話")
+                
+                # 直接用reply_message發送AI回應
+                line_bot_api.reply_message(
+                    reply_token,
+                    TextSendMessage(text=reply_msg)
+                )
+                logger.info("✅ 同步模式處理完成")
+                
+            except Exception as sync_error:
+                logger.error(f"❌ 同步模式處理失敗: {sync_error}")
+                import traceback
+                logger.error(f"❌ 詳細錯誤: {traceback.format_exc()}")
+                
+                # 發送錯誤訊息
+                try:
+                    line_bot_api.reply_message(
+                        reply_token,
+                        TextSendMessage(text="❌ 處理訊息時發生錯誤，請稍後再試")
+                    )
+                except Exception as reply_error:
+                    logger.error(f"❌ 發送錯誤訊息失敗: {reply_error}")
+                    # 如果reply_message失敗，嘗試用push_message
+                    try:
+                        line_bot_api.push_message(
+                            user_id,
+                            TextSendMessage(text="❌ 處理訊息時發生錯誤，請稍後再試")
+                        )
+                    except:
+                        logger.error("❌ 所有訊息發送方式都失敗")
+        else:
+            logger.info("🔄 使用異步模式處理")
+            # 先用reply_message立即回應"正在思考"
+            try:
+                logger.info("📤 使用reply_message發送思考中訊息")
+                line_bot_api.reply_message(
+                    reply_token,
+                    TextSendMessage(text="🤔 正在思考中，請稍等...")
+                )
+                logger.info("✅ 思考中訊息已透過reply_message發送")
+            except Exception as reply_error:
+                logger.error(f"❌ Reply message發送失敗: {reply_error}")
+            
+            # 在背景執行緒中處理AI回應
+            logger.info("🧵 創建背景執行緒處理AI回應")
+            thread = threading.Thread(
+                target=process_message_async,
+                args=(user_id, message_text)
+            )
+            thread.daemon = True
+            thread.start()
+            logger.info("🚀 背景執行緒已啟動")
+            
+            # 等待一小段時間確保背景執行緒開始執行
+            time.sleep(0.1)
+            logger.info("⏰ 已等待背景執行緒啟動")
     else:
         logger.info("⚠️ 系統未處於工作狀態，略過處理")
 if __name__ == "__main__":
