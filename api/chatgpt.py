@@ -121,15 +121,24 @@ class ChatGPT:
         logger.info("🚀 開始向Ollama請求回應")
         
         try:
+            # 檢查是否隱藏思考過程
+            hide_thinking = os.getenv("HIDE_THINKING", "true").lower() == "true"
+            logger.info(f"🔧 隱藏思考過程設定: {hide_thinking}")
+            
             response = self.client.chat(
                 model=self.model,
                 messages=messages,
-                keep_alive=-1  # 永遠保持在記憶體中
+                keep_alive=-1,  # 永遠保持在記憶體中
+                think=not hide_thinking  # 如果hide_thinking=True，則think=False
             )
             logger.info("✅ 成功獲取Ollama回應")
             
             ai_response = response['message']['content'].strip()
             logger.info(f"🤖 AI回應內容: {ai_response}")
+            
+            # 如果有思考過程且未隱藏，記錄思考內容
+            if response['message'].get('thinking') and not hide_thinking:
+                logger.info(f"🧠 思考過程: {response['message']['thinking'][:100]}...")
             
             return ai_response
             
