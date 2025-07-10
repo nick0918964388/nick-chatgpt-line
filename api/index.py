@@ -39,7 +39,10 @@ def status():
         "line_configured": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN")),
         "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:7b-instruct-q4_0"),
-        "sync_mode_enabled": use_sync_mode
+        "sync_mode_enabled": use_sync_mode,
+        "tools_enabled": True,
+        "available_tools": ["get_inventory_info", "get_item_info"],
+        "tool_api_base": "http://tra.webtw.xyz:8888/maximo/oslc/script/"
     }
 
 # 測試endpoint
@@ -90,6 +93,21 @@ def test_push_message(user_id):
         return {"status": "success", "message": "Push message發送成功", "response": str(response)}
     except Exception as e:
         logger.error(f"❌ Push message發送失敗: {e}")
+        return {"status": "error", "message": str(e)}
+
+# 測試工具API的endpoint
+@app.route('/test_tool/<tool_name>/<itemnum>', methods=['GET'])
+def test_tool(tool_name, itemnum):
+    """測試工具API"""
+    logger.info(f"🔍 測試工具 {tool_name} 查詢料號 {itemnum}")
+    
+    try:
+        from api.tools import execute_tool
+        result = execute_tool(tool_name, {"itemnum": itemnum})
+        logger.info(f"✅ 工具測試成功: {tool_name}")
+        return result
+    except Exception as e:
+        logger.error(f"❌ 工具測試失敗: {e}")
         return {"status": "error", "message": str(e)}
 @app.route("/webhook", methods=['POST'])
 def callback():

@@ -1,8 +1,11 @@
 from api.prompt import Prompt
+from api.tools import AVAILABLE_TOOLS, execute_tool, get_tools_description
 import os
 import ollama
 import requests
 import logging
+import json
+import re
 
 # 設定logging
 logger = logging.getLogger(__name__)
@@ -95,58 +98,114 @@ class ChatGPT:
 
     def get_response(self):
         logger.info("🧠 開始獲取AI回應")
-        messages = []
         
-        logger.info("📝 處理對話訊息")
-        for i, msg in enumerate(self.prompt.msg_list):
-            logger.info(f"📝 處理訊息 {i+1}: {msg[:50]}...")
+        # 最大工具呼叫次數，避免無限循環
+        max_tool_calls = 3
+        tool_call_count = 0
+        
+        while tool_call_count < max_tool_calls:
+            messages = []
             
-            if msg.startswith("system:"):
-                role = "system"
-                content = msg[7:].strip()
-            elif msg.startswith("Human:"):
-                role = "user"
-                content = msg[6:].strip()
-            elif msg.startswith("AI:"):
-                role = "assistant"
-                content = msg[3:].strip()
-            else:
-                logger.warning(f"⚠️ 跳過無效的訊息格式: {msg[:30]}...")
-                continue  # 跳過無效的消息格式
-            
-            messages.append({"role": role, "content": content})
-            logger.info(f"✅ 已加入 {role} 訊息")
+            logger.info("📝 處理對話訊息")
+            for i, msg in enumerate(self.prompt.msg_list):
+                logger.info(f"📝 處理訊息 {i+1}: {msg[:50]}...")
+                
+                if msg.startswith("system:"):
+                    role = "system"
+                    content = msg[7:].strip()
+                elif msg.startswith("Human:"):
+                    role = "user"
+                    content = msg[6:].strip()
+                elif msg.startswith("AI:"):
+                    role = "assistant"
+                    content = msg[3:].strip()
+                else:
+                    logger.warning(f"⚠️ 跳過無效的訊息格式: {msg[:30]}...")
+                    continue  # 跳過無效的消息格式
+                
+                messages.append({"role": role, "content": content})
+                logger.info(f"✅ 已加入 {role} 訊息")
 
-        logger.info(f"📋 總共處理 {len(messages)} 條訊息")
-        logger.info("🚀 開始向Ollama請求回應")
+            logger.info(f"📋 總共處理 {len(messages)} 條訊息")
+            logger.info("🚀 開始向Ollama請求回應")
+            
+            try:
+                response = self.client.chat(
+                    model=self.model,
+                    messages=messages,
+                    keep_alive=-1  # 永遠保持在記憶體中
+                )
+                logger.info("✅ 成功獲取Ollama回應")
+                
+                ai_response = response['message']['content'].strip()
+                logger.info(f"🤖 AI回應內容: {ai_response}")
+                
+                # 檢查是否包含工具呼叫
+                tool_calls = self._extract_tool_calls(ai_response)
+                
+                if tool_calls:
+                    logger.info(f"🛠️ 檢測到 {len(tool_calls)} 個工具呼叫")
+                    tool_call_count += 1
+                    
+                    # 執行工具並加入結果
+                    tool_results = []
+                    for tool_call in tool_calls:
+                        result = execute_tool(tool_call["name"], tool_call["parameters"])
+                        tool_results.append(result)
+                        
+                        # 將工具結果加入對話
+                        tool_result_msg = f"system:工具執行結果 [{tool_call['name']}]: {json.dumps(result, ensure_ascii=False, indent=2)}"
+                        self.prompt.add_msg(tool_result_msg)
+                        logger.info(f"📝 已加入工具結果: {tool_call['name']}")
+                    
+                    # 繼續循環以取得最終回應
+                    continue
+                else:
+                    # 沒有工具呼叫，回傳最終回應
+                    return ai_response
+                    
+            except Exception as e:
+                logger.error(f"❌ 獲取AI回應時發生錯誤: {e}")
+                import traceback
+                logger.error(f"❌ 詳細錯誤: {traceback.format_exc()}")
+                raise
         
-        try:
-            # 檢查是否隱藏思考過程
-            hide_thinking = os.getenv("HIDE_THINKING", "true").lower() == "true"
-            logger.info(f"🔧 隱藏思考過程設定: {hide_thinking}")
+        logger.warning("⚠️ 達到最大工具呼叫次數限制")
+        return "處理過程中達到工具呼叫次數限制，請稍後再試。"
+
+    def _extract_tool_calls(self, text):
+        """從AI回應中提取工具呼叫"""
+        logger.info("🔍 分析AI回應中的工具呼叫")
+        tool_calls = []
+        
+        # 匹配工具呼叫模式: [TOOL:tool_name:parameters]
+        pattern = r'\[TOOL:(\w+):([^\]]+)\]'
+        matches = re.findall(pattern, text)
+        
+        for tool_name, params_str in matches:
+            logger.info(f"🛠️ 發現工具呼叫: {tool_name} 參數: {params_str}")
             
-            response = self.client.chat(
-                model=self.model,
-                messages=messages,
-                keep_alive=-1,  # 永遠保持在記憶體中
-                think=not hide_thinking  # 如果hide_thinking=True，則think=False
-            )
-            logger.info("✅ 成功獲取Ollama回應")
-            
-            ai_response = response['message']['content'].strip()
-            logger.info(f"🤖 AI回應內容: {ai_response}")
-            
-            # 如果有思考過程且未隱藏，記錄思考內容
-            if response['message'].get('thinking') and not hide_thinking:
-                logger.info(f"🧠 思考過程: {response['message']['thinking'][:100]}...")
-            
-            return ai_response
-            
-        except Exception as e:
-            logger.error(f"❌ 獲取AI回應時發生錯誤: {e}")
-            import traceback
-            logger.error(f"❌ 詳細錯誤: {traceback.format_exc()}")
-            raise
+            if tool_name in AVAILABLE_TOOLS:
+                try:
+                    # 解析參數
+                    if params_str.startswith('{') and params_str.endswith('}'):
+                        # JSON格式參數
+                        parameters = json.loads(params_str)
+                    else:
+                        # 簡單字串參數，預設為itemnum
+                        parameters = {"itemnum": params_str}
+                    
+                    tool_calls.append({
+                        "name": tool_name,
+                        "parameters": parameters
+                    })
+                    logger.info(f"✅ 工具呼叫解析成功: {tool_name}")
+                except Exception as e:
+                    logger.error(f"❌ 工具參數解析失敗: {e}")
+            else:
+                logger.warning(f"⚠️ 未知的工具: {tool_name}")
+        
+        return tool_calls
 
     def add_msg(self, text):
         logger.info(f"📝 加入訊息到對話: {text}")
