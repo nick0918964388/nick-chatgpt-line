@@ -2,3 +2,4 @@ Flask
 line-bot-sdk
 ollama
 python-dotenv
+requests
