@@ -44,7 +44,8 @@ def status():
         "available_tools": ["get_inventory_info", "get_item_info"],
         "tool_api_base": "http://tra.webtw.xyz:8888/maximo/oslc/script/",
         "maxauth_configured": bool(os.getenv("MAXAUTH")),
-        "max_tool_calls": int(os.getenv("MAX_TOOL_CALLS", default=3))
+        "max_tool_calls": int(os.getenv("MAX_TOOL_CALLS", default=3)),
+        "thinking_enabled": os.getenv("ENABLE_THINKING", "false").lower() == "true"
     }
 
 # 測試endpoint
@@ -59,7 +60,8 @@ def test_line_api():
         "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:7b-instruct-q4_0"),
         "maxauth_configured": bool(os.getenv("MAXAUTH")),
-        "max_tool_calls": int(os.getenv("MAX_TOOL_CALLS", default=3))
+        "max_tool_calls": int(os.getenv("MAX_TOOL_CALLS", default=3)),
+        "thinking_enabled": os.getenv("ENABLE_THINKING", "false").lower() == "true"
     }
     
     # 測試ollama連接
@@ -185,6 +187,72 @@ def test_maximo():
     
     logger.info(f"📋 Maximo API測試完成: {results}")
     return results
+
+# 測試thinking模式
+@app.route('/test_thinking', methods=['POST'])
+def test_thinking():
+    """測試thinking vs non-thinking模式的差異"""
+    try:
+        data = request.get_json()
+        test_message = data.get('message', '請簡單自我介紹')
+        
+        logger.info(f"🧪 測試thinking模式，訊息: {test_message}")
+        
+        # 測試兩種模式
+        results = {
+            "test_message": test_message,
+            "thinking_enabled": {},
+            "thinking_disabled": {}
+        }
+        
+        # 測試thinking啟用
+        try:
+            logger.info("🧠 測試thinking啟用模式")
+            temp_chatgpt = ChatGPT()
+            temp_chatgpt.enable_thinking = True
+            temp_chatgpt.add_msg(f"user:{test_message}")
+            
+            thinking_response = temp_chatgpt.get_response()
+            results["thinking_enabled"] = {
+                "success": True,
+                "response": thinking_response,
+                "response_length": len(thinking_response)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Thinking啟用測試失敗: {e}")
+            results["thinking_enabled"] = {
+                "success": False,
+                "error": str(e)
+            }
+        
+        # 測試thinking禁用
+        try:
+            logger.info("🚫 測試thinking禁用模式")
+            temp_chatgpt2 = ChatGPT()
+            temp_chatgpt2.enable_thinking = False
+            temp_chatgpt2.add_msg(f"user:{test_message}")
+            
+            no_thinking_response = temp_chatgpt2.get_response()
+            results["thinking_disabled"] = {
+                "success": True,
+                "response": no_thinking_response,
+                "response_length": len(no_thinking_response)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Thinking禁用測試失敗: {e}")
+            results["thinking_disabled"] = {
+                "success": False,
+                "error": str(e)
+            }
+        
+        logger.info("✅ Thinking模式測試完成")
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Thinking測試失敗: {e}")
+        return {"error": str(e)}
 @app.route("/webhook", methods=['POST'])
 def callback():
     logger.info("🔄 收到webhook請求")

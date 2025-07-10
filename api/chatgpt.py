@@ -19,6 +19,10 @@ class ChatGPT:
         logger.info(f"🤖 使用模型: {self.model}")
         logger.info(f"🌐 Ollama主機: {self.ollama_host}")
         
+        # 檢查thinking設定
+        self.enable_thinking = os.getenv("ENABLE_THINKING", "false").lower() == "true"
+        logger.info(f"🧠 Thinking模式設定: {'啟用' if self.enable_thinking else '禁用'}")
+        
         self.client = ollama.Client(host=self.ollama_host, timeout=300)  # 5分鐘timeout
         logger.info("✅ Ollama客戶端創建成功")
         
@@ -134,7 +138,8 @@ class ChatGPT:
                 response = self.client.chat(
                     model=self.model,
                     messages=messages,
-                    keep_alive=-1  # 永遠保持在記憶體中
+                    keep_alive=-1,  # 永遠保持在記憶體中
+                    think=self.enable_thinking  # 控制thinking模式
                 )
                 logger.info("✅ 成功獲取Ollama回應")
                 
