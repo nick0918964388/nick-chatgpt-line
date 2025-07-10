@@ -43,7 +43,8 @@ def status():
         "tools_enabled": True,
         "available_tools": ["get_inventory_info", "get_item_info"],
         "tool_api_base": "http://tra.webtw.xyz:8888/maximo/oslc/script/",
-        "maxauth_configured": bool(os.getenv("MAXAUTH"))
+        "maxauth_configured": bool(os.getenv("MAXAUTH")),
+        "max_tool_calls": int(os.getenv("MAX_TOOL_CALLS", default=3))
     }
 
 # 測試endpoint
@@ -57,7 +58,8 @@ def test_line_api():
         "line_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
         "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:7b-instruct-q4_0"),
-        "maxauth_configured": bool(os.getenv("MAXAUTH"))
+        "maxauth_configured": bool(os.getenv("MAXAUTH")),
+        "max_tool_calls": int(os.getenv("MAX_TOOL_CALLS", default=3))
     }
     
     # 測試ollama連接

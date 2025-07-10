@@ -100,8 +100,9 @@ class ChatGPT:
         logger.info("🧠 開始獲取AI回應")
         
         # 最大工具呼叫次數，避免無限循環
-        max_tool_calls = 3
+        max_tool_calls = int(os.getenv("MAX_TOOL_CALLS", default=3))
         tool_call_count = 0
+        logger.info(f"🔧 最大工具呼叫次數設定為: {max_tool_calls}")
         
         while tool_call_count < max_tool_calls:
             messages = []
