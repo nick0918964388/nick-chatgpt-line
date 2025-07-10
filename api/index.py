@@ -42,7 +42,8 @@ def status():
         "sync_mode_enabled": use_sync_mode,
         "tools_enabled": True,
         "available_tools": ["get_inventory_info", "get_item_info"],
-        "tool_api_base": "http://tra.webtw.xyz:8888/maximo/oslc/script/"
+        "tool_api_base": "http://tra.webtw.xyz:8888/maximo/oslc/script/",
+        "maxauth_configured": bool(os.getenv("MAXAUTH"))
     }
 
 # 測試endpoint
@@ -55,7 +56,8 @@ def test_line_api():
         "line_token": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN")),
         "line_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
         "ollama_host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:7b-instruct-q4_0")
+        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:7b-instruct-q4_0"),
+        "maxauth_configured": bool(os.getenv("MAXAUTH"))
     }
     
     # 測試ollama連接
@@ -109,6 +111,78 @@ def test_tool(tool_name, itemnum):
     except Exception as e:
         logger.error(f"❌ 工具測試失敗: {e}")
         return {"status": "error", "message": str(e)}
+
+# 測試Maximo API連接
+@app.route('/test_maximo', methods=['GET'])
+def test_maximo():
+    """測試Maximo API連接和認證"""
+    logger.info("🔍 測試Maximo API連接")
+    
+    results = {
+        "maxauth_configured": bool(os.getenv("MAXAUTH")),
+        "api_base": "http://tra.webtw.xyz:8888/maximo/oslc/script/",
+        "tests": []
+    }
+    
+    # 測試庫存API
+    try:
+        import requests
+        url = "http://tra.webtw.xyz:8888/maximo/oslc/script/ZZ_ITEM_GETINVB?itemnum=TEST123"
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        maxauth = os.getenv("MAXAUTH")
+        if maxauth:
+            headers["maxauth"] = maxauth
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        results["tests"].append({
+            "api": "ZZ_ITEM_GETINVB",
+            "status_code": response.status_code,
+            "success": response.status_code == 200,
+            "message": "連接成功" if response.status_code == 200 else f"HTTP {response.status_code}"
+        })
+        
+    except Exception as e:
+        results["tests"].append({
+            "api": "ZZ_ITEM_GETINVB",
+            "success": False,
+            "error": str(e)
+        })
+    
+    # 測試料號API
+    try:
+        url = "http://tra.webtw.xyz:8888/maximo/oslc/script/ZZ_ITEM_GETITEM?itemnum=TEST123"
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        maxauth = os.getenv("MAXAUTH")
+        if maxauth:
+            headers["maxauth"] = maxauth
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        results["tests"].append({
+            "api": "ZZ_ITEM_GETITEM",
+            "status_code": response.status_code,
+            "success": response.status_code == 200,
+            "message": "連接成功" if response.status_code == 200 else f"HTTP {response.status_code}"
+        })
+        
+    except Exception as e:
+        results["tests"].append({
+            "api": "ZZ_ITEM_GETITEM",
+            "success": False,
+            "error": str(e)
+        })
+    
+    logger.info(f"📋 Maximo API測試完成: {results}")
+    return results
 @app.route("/webhook", methods=['POST'])
 def callback():
     logger.info("🔄 收到webhook請求")

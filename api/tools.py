@@ -1,6 +1,7 @@
 import requests
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,20 @@ def get_inventory_info(itemnum):
         url = f"http://tra.webtw.xyz:8888/maximo/oslc/script/ZZ_ITEM_GETINVB?itemnum={itemnum}"
         logger.info(f"🔍 查詢庫存資訊: {url}")
         
-        response = requests.get(url, timeout=10)
+        # 設定必要的headers
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        # 從環境變數取得maxauth
+        maxauth = os.getenv("MAXAUTH")
+        if maxauth:
+            headers["maxauth"] = maxauth
+            logger.info("🔑 已加入maxauth認證")
+        else:
+            logger.warning("⚠️ 未設定MAXAUTH環境變數")
+        
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
         data = response.json()
@@ -36,7 +50,20 @@ def get_item_info(itemnum):
         url = f"http://tra.webtw.xyz:8888/maximo/oslc/script/ZZ_ITEM_GETITEM?itemnum={itemnum}"
         logger.info(f"🔍 查詢料號資訊: {url}")
         
-        response = requests.get(url, timeout=10)
+        # 設定必要的headers
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        # 從環境變數取得maxauth
+        maxauth = os.getenv("MAXAUTH")
+        if maxauth:
+            headers["maxauth"] = maxauth
+            logger.info("🔑 已加入maxauth認證")
+        else:
+            logger.warning("⚠️ 未設定MAXAUTH環境變數")
+        
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
         data = response.json()
