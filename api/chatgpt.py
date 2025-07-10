@@ -1,17 +1,12 @@
 from api.prompt import Prompt
 import os
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+import ollama
 
 class ChatGPT:
     def __init__(self):
         self.prompt = Prompt()
-        self.model = os.getenv("OPENAI_MODEL", default="gpt-3.5-turbo")
-        self.temperature = float(os.getenv("OPENAI_TEMPERATURE", default=0))
-        self.frequency_penalty = float(os.getenv("OPENAI_FREQUENCY_PENALTY", default=0))
-        self.presence_penalty = float(os.getenv("OPENAI_PRESENCE_PENALTY", default=0.6))
-        self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", default=240))
+        self.model = os.getenv("OLLAMA_MODEL", default="qwen3:30b-a3b-q8_0")
+        self.client = ollama.Client(host=os.getenv("OLLAMA_HOST", default="http://localhost:11434"))
 
     def get_response(self):
         messages = []
@@ -29,15 +24,11 @@ class ChatGPT:
                 continue  # 跳過無效的消息格式
             messages.append({"role": role, "content": content})
 
-        response = client.chat.completions.create(
+        response = self.client.chat(
             model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            frequency_penalty=self.frequency_penalty,
-            presence_penalty=self.presence_penalty,
-            max_tokens=self.max_tokens
+            messages=messages
         )
-        return response.choices[0].message.content.strip()
+        return response['message']['content'].strip()
 
     def add_msg(self, text):
         self.prompt.add_msg(text)
